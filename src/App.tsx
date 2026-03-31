@@ -188,9 +188,11 @@ function StepDescription({
 function StepResults({
   result,
   onReset,
+  durationMs,
 }: {
   result: PriceResult;
   onReset: () => void;
+  durationMs?: number;
 }) {
   const { pricing, market_arguments, evidence } = result;
   const { fast, balanced, profit } = pricing.strategies;
@@ -244,6 +246,14 @@ function StepResults({
         <RefreshCw size={18} />
         Нова оцінка
       </button>
+
+      {durationMs !== undefined && (
+        <div className="text-center -mt-4">
+          <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">
+            час відповіді: {durationMs}ms
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -253,7 +263,7 @@ function StepResults({
 type FlowState =
   | { step: 0 }
   | { step: 1; sessionId: string; title: string; category: string; loading: boolean }
-  | { step: 2; result: PriceResult; sessionId: string };
+  | { step: 2; result: PriceResult; sessionId: string; durationMs?: number };
 
 export default function App() {
   const [state, setState] = useState<FlowState>({ step: 0 });
@@ -288,6 +298,7 @@ export default function App() {
       setError(null);
       setState((s) => (s.step === 1 ? { ...s, loading: true } : s));
 
+      const start = Date.now();
       try {
         const result = await getPrice(
           state.sessionId,
@@ -295,7 +306,8 @@ export default function App() {
           description,
           Number(state.category),
         );
-        setState({ step: 2, result, sessionId: state.sessionId });
+        const durationMs = Date.now() - start;
+        setState({ step: 2, result, sessionId: state.sessionId, durationMs });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Щось пішло не так");
         setState((s) => (s.step === 1 ? { ...s, loading: false } : s));
@@ -369,7 +381,11 @@ export default function App() {
                   />
                 )}
                 {state.step === 2 && (
-                  <StepResults result={state.result} onReset={handleReset} />
+                  <StepResults 
+                    result={state.result} 
+                    onReset={handleReset} 
+                    durationMs={state.durationMs}
+                  />
                 )}
               </div>
             </div>
