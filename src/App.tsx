@@ -44,14 +44,15 @@ export default function App() {
   const handleGoToRecommendation = useCallback(
     (
       opts:
-        | { kind: "immediate"; result: EstimateResult }
+        | { kind: "immediate"; result: EstimateResult; latencyMs: number }
         | { kind: "pending"; submittedDescription: string },
     ) => {
       if (opts.kind === "immediate") {
         setRecommendation(opts.result);
         setIsWaitingForRecommendation(false);
         setRecommendationLoadingStartedAt(null);
-        setLastRecommendationLoadingDuration(null);
+        setLastRecommendationRequestLatency(opts.latencyMs);
+        setLastRecommendationLoadingDuration(0);
       } else {
         const startedAt = Date.now();
         setRecommendationLoadingStartedAt(startedAt);

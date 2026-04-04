@@ -9,7 +9,7 @@ interface Props {
   onBack: () => void;
   onGoToRecommendation: (
     opts:
-      | { kind: "immediate"; result: EstimateResult }
+      | { kind: "immediate"; result: EstimateResult; latencyMs: number }
       | { kind: "pending"; submittedDescription: string },
   ) => void;
   onLatestSubmittedDescriptionChange: (desc: string) => void;
@@ -36,6 +36,7 @@ export function DescriptionScreen({
   const streamingScheduledRef = useRef(false);
   const requestCountRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCompletedLatencyRef = useRef<number>(0);
   const onLatestSubmittedRef = useRef(onLatestSubmittedDescriptionChange);
 
   // Keep refs in sync with latest prop values
@@ -112,10 +113,12 @@ export function DescriptionScreen({
       const controller = new AbortController();
       inFlightControllerRef.current = controller;
       onLatestSubmittedRef.current(desc);
+      const requestStart = Date.now();
 
       try {
         const result = await estimate(desc, controller.signal);
         if (controller.signal.aborted) return;
+        lastCompletedLatencyRef.current = Date.now() - requestStart;
         lastCompletedResultRef.current = result;
         lastCompletedDescriptionRef.current = desc;
         requestCountRef.current += 1;
@@ -188,7 +191,11 @@ export function DescriptionScreen({
 
     if (lastCompletedResultRef.current !== null) {
       // Case A: already have a result
-      onGoToRecommendation({ kind: "immediate", result: lastCompletedResultRef.current });
+      onGoToRecommendation({
+        kind: "immediate",
+        result: lastCompletedResultRef.current,
+        latencyMs: lastCompletedLatencyRef.current,
+      });
     } else {
       // Case B: no result yet — fire fresh and show loading
       onGoToRecommendation({ kind: "pending", submittedDescription: trimmed });
