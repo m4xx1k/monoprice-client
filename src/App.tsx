@@ -1,106 +1,42 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { 
-  ScanSearch, 
-  ArrowRight, 
-  ArrowLeft, 
-  Sparkles, 
-  RefreshCw, 
-  Package, 
-  LayoutGrid, 
+import { useState, useCallback } from "react";
+import {
+  ScanSearch,
+  ArrowRight,
+  ArrowLeft,
+  Sparkles,
+  RefreshCw,
+  Package,
   FileText,
-  ChevronRight,
-  AlertCircle
+  Info,
+  AlertCircle,
 } from "lucide-react";
-import { initProduct, getPrice, cleanupProduct } from "./api";
-import { uid } from "./helpers";
-import type { PriceResult } from "./types";
+import { warmup, estimate } from "./api";
+import type { EstimateResult } from "./types";
 import { Progress } from "./components/Progress";
 import { PhotoPicker } from "./components/PhotoPicker";
 import { Spinner } from "./components/Spinner";
 import { StrategyCard } from "./components/StrategyCard";
 import { EvidenceCard } from "./components/EvidenceCard";
-import { MarketInsights } from "./components/MarketInsights";
 
-const CATEGORIES: Record<string, string> = {
-  "4": "Смартфони Apple",
-  "512": "Кросівки",
-  "743": "Конструктори",
-  "795": "Книги та журнали",
-  "1677": "Колекційні фігурки",
-  "1261": "Шини, диски і колеса",
-  "1320": "Меблі / Стільці",
-};
+/* ─── Step 1: Photos ─── */
 
-/* ─── Step 1: Product info ─── */
-
-function StepInfo({
-  onNext,
-}: {
-  onNext: (data: { sessionId: string; title: string; category: string; photos: File[] }) => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("");
+function StepInfo({ onNext }: { onNext: (photos: File[]) => void }) {
   const [photos, setPhotos] = useState<File[]>([]);
-
-  const valid = title.trim().length > 1 && category && photos.length > 0;
+  const valid = photos.length > 0;
 
   return (
     <form
       className="flex flex-col gap-6"
       onSubmit={(e) => {
         e.preventDefault();
-        if (valid) onNext({ sessionId: uid(), title: title.trim(), category, photos });
+        if (valid) onNext(photos);
       }}
     >
-      <div className="space-y-4">
-        <div>
-          <label className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">
-            <Package size={14} className="text-violet-500" />
-            Назва товару
-          </label>
-          <div className="relative group">
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Наприклад: iPhone 14 Pro 128GB"
-              className="w-full px-5 py-4 rounded-2xl border-2 border-gray-100 bg-white text-base font-medium outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-50 transition-all placeholder:text-gray-300"
-            />
-          </div>
-        </div>
-
-        <div className="relative">
-          <label className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">
-            <LayoutGrid size={14} className="text-violet-500" />
-            Категорія
-          </label>
-          <div className="relative">
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl border-2 border-gray-100 bg-white text-base font-medium outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-50 transition-all appearance-none cursor-pointer"
-            >
-              <option value="">Оберіть категорію</option>
-              {Object.entries(CATEGORIES).map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </select>
-            <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-              <ChevronRight size={18} className="rotate-90" />
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <PhotoPicker
-            photos={photos}
-            onAdd={(files) => setPhotos((p) => [...p, ...files].slice(0, 5))}
-            onRemove={(i) => setPhotos((p) => p.filter((_, idx) => idx !== i))}
-          />
-        </div>
-      </div>
+      <PhotoPicker
+        photos={photos}
+        onAdd={(files) => setPhotos((p) => [...p, ...files].slice(0, 5))}
+        onRemove={(i) => setPhotos((p) => p.filter((_, idx) => idx !== i))}
+      />
 
       <button
         type="submit"
@@ -190,32 +126,48 @@ function StepResults({
   onReset,
   durationMs,
 }: {
-  result: PriceResult;
+  result: EstimateResult;
   onReset: () => void;
   durationMs?: number;
 }) {
-  const { pricing, market_arguments, evidence } = result;
-  const { fast, balanced, profit } = pricing.strategies;
+  const { price, days_to_sell, statistics, similar_products } = result;
+  const { bargain_percentage } = statistics;
+
+  const bargainMessage =
+    bargain_percentage >= 30
+      ? `У цій категорії ${bargain_percentage}% покупців торгуються. Рекомендуємо встановити ціну трохи вище — з розрахунком на знижку.`
+      : "У цій категорії покупці рідко торгуються. Встановлена ціна скоріш за все буде фінальною.";
+
+  const midDays = Math.round((days_to_sell.min + days_to_sell.max) / 2);
+
+  const strategies = [
+    { name: "Швидко", price: price.min, estimatedDays: `~${days_to_sell.min} дні` },
+    { name: "Баланс", price: price.balanced, estimatedDays: `~${midDays} дні` },
+    { name: "Вигідно", price: price.profit, estimatedDays: `~${days_to_sell.max} днів` },
+  ] as const;
 
   return (
     <div className="flex flex-col gap-8 pb-4">
       {/* Strategy cards */}
       <div className="grid grid-cols-3 gap-2.5">
-        <StrategyCard strategy={fast} color="emerald" />
-        <StrategyCard strategy={balanced} color="violet" featured />
-        <StrategyCard strategy={profit} color="amber" />
+        <StrategyCard strategy={strategies[0]} color="emerald" />
+        <StrategyCard strategy={strategies[1]} color="violet" featured />
+        <StrategyCard strategy={strategies[2]} color="amber" />
       </div>
 
       <div className="space-y-8">
-        {/* Market insights */}
-        <MarketInsights
-          confidence={market_arguments.confidence_score}
-          label={market_arguments.confidence_label}
-          templates={market_arguments.templates}
-        />
+        {/* Bargain insight */}
+        <div className="flex gap-3 items-start p-4 rounded-2xl bg-amber-50 border border-amber-100">
+          <div className="min-w-[32px] h-8 flex items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+            <Info size={16} />
+          </div>
+          <p className="text-[13px] text-gray-700 font-medium leading-relaxed">
+            {bargainMessage}
+          </p>
+        </div>
 
-        {/* Evidence products */}
-        {evidence.top_similar_products.length > 0 && (
+        {/* Similar sold products */}
+        {similar_products.sold.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
@@ -227,12 +179,12 @@ function StepResults({
                 </h3>
               </div>
               <span className="px-2 py-0.5 rounded-md bg-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-tighter">
-                {evidence.total_found} знайдено
+                {similar_products.sold.length} знайдено
               </span>
             </div>
             <div className="flex gap-4 overflow-x-auto pb-4 -mx-5 px-5 snap-x snap-mandatory no-scrollbar">
-              {evidence.top_similar_products.map((p) => (
-                <EvidenceCard key={p.external_id} product={p} />
+              {similar_products.sold.map((p, i) => (
+                <EvidenceCard key={i} product={p} />
               ))}
             </div>
           </div>
@@ -262,85 +214,47 @@ function StepResults({
 
 type FlowState =
   | { step: 0 }
-  | { step: 1; sessionId: string; title: string; category: string; loading: boolean }
-  | { step: 2; result: PriceResult; sessionId: string; durationMs?: number };
+  | { step: 1; loading: boolean }
+  | { step: 2; result: EstimateResult; durationMs?: number };
 
 export default function App() {
   const [state, setState] = useState<FlowState>({ step: 0 });
   const [error, setError] = useState<string | null>(null);
-  const initDone = useRef(false);
 
-  const handleStep1 = useCallback(
-    async (data: { sessionId: string; title: string; category: string; photos: File[] }) => {
-      setError(null);
-      setState({
-        step: 1,
-        sessionId: data.sessionId,
-        title: data.title,
-        category: data.category,
-        loading: false,
-      });
-
-      initDone.current = false;
-      try {
-        await initProduct(data.sessionId, data.title, data.category, data.photos);
-        initDone.current = true;
-      } catch {
-        initDone.current = true;
-      }
-    },
-    [],
-  );
+  const handleStep1 = useCallback((photos: File[]) => {
+    setError(null);
+    setState({ step: 1, loading: false });
+    warmup(photos).catch(() => {});
+  }, []);
 
   const handleStep2 = useCallback(
     async (description: string) => {
       if (state.step !== 1) return;
       setError(null);
-      setState((s) => (s.step === 1 ? { ...s, loading: true } : s));
+      setState({ step: 1, loading: true });
 
       const start = Date.now();
       try {
-        const result = await getPrice(
-          state.sessionId,
-          state.title,
-          description,
-          Number(state.category),
-        );
+        const result = await estimate(description);
         const durationMs = Date.now() - start;
-        setState({ step: 2, result, sessionId: state.sessionId, durationMs });
+        setState({ step: 2, result, durationMs });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Щось пішло не так");
-        setState((s) => (s.step === 1 ? { ...s, loading: false } : s));
+        setState({ step: 1, loading: false });
       }
     },
     [state],
   );
 
   const handleReset = useCallback(() => {
-    if (state.step === 2) {
-      cleanupProduct(state.sessionId);
-    }
     setState({ step: 0 });
     setError(null);
-    initDone.current = false;
-  }, [state]);
+  }, []);
 
   const handleBack = useCallback(() => {
-    if (state.step === 1) {
-      cleanupProduct(state.sessionId);
-    }
     setState({ step: 0 });
     setError(null);
-    initDone.current = false;
-  }, [state]);
-
-  useEffect(() => {
-    return () => {
-      if (state.step >= 1 && "sessionId" in state) {
-        cleanupProduct(state.sessionId);
-      }
-    };
-  }, [state]);
+  }, []);
 
   return (
     <div className="min-h-dvh bg-white sm:bg-gray-50 selection:bg-violet-100 selection:text-violet-900">
@@ -381,9 +295,9 @@ export default function App() {
                   />
                 )}
                 {state.step === 2 && (
-                  <StepResults 
-                    result={state.result} 
-                    onReset={handleReset} 
+                  <StepResults
+                    result={state.result}
+                    onReset={handleReset}
                     durationMs={state.durationMs}
                   />
                 )}
@@ -391,7 +305,7 @@ export default function App() {
             </div>
           </div>
         </main>
-        
+
         <footer className="py-8 text-center px-6">
           <p className="text-[10px] font-bold text-gray-300 uppercase tracking-[0.2em]">
             Powered by Advanced AI Pricing Engine

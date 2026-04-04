@@ -40,13 +40,13 @@ export function StrategyCard({
           {strategy.name}
         </div>
         <div className="text-lg font-black leading-none">
-          {formatPrice(strategy.recommended_listing_price)}
+          {formatPrice(strategy.price)}
         </div>
       </div>
 
       <div className="mt-3">
         <div className="text-[10px] font-medium opacity-60">
-          ~{strategy.estimated_days}
+          {strategy.estimatedDays}
         </div>
         {strategy.badge && (
           <div className={`mt-1.5 inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tight ${
