@@ -23,7 +23,7 @@ export default function App() {
   const [lastRecommendationLoadingDuration, setLastRecommendationLoadingDuration] = useState<
     number | null
   >(null);
-  const [latestSubmittedDescription, setLatestSubmittedDescription] = useState("");
+  const [, setLatestSubmittedDescription] = useState("");
 
   const reset = useCallback(() => {
     setStep(0);
