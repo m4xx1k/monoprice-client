@@ -1,42 +1,41 @@
 export type Strategy = {
   name: string;
-  expected_revenue: number;
-  recommended_listing_price: number;
-  estimated_days: string;
+  price: number;
+  estimatedDays: string;
   badge?: string;
 };
 
-export type MarketTemplate = {
-  icon: string;
-  title: string;
-  text: string;
-};
-
-export type EvidenceProduct = {
-  external_id: string;
+export type SoldProduct = {
+  image_url: string;
   title: string;
   original_price: number;
   sold_price: number;
-  similarity: number;
-  days_to_sell: number;
-  image_url: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-export type PriceResult = {
-  pricing: {
-    strategies: {
-      fast: Strategy;
-      balanced: Strategy;
-      profit: Strategy;
-    };
+export type ActiveProduct = {
+  image_url: string;
+  title: string;
+  original_price: number;
+  created_at: string;
+};
+
+export type EstimateResult = {
+  price: {
+    min: number;
+    balanced: number;
+    profit: number;
   };
-  market_arguments: {
-    confidence_score: number;
-    confidence_label: string;
-    templates: MarketTemplate[];
+  days_to_sell: {
+    min: number;
+    max: number;
   };
-  evidence: {
-    total_found: number;
-    top_similar_products: EvidenceProduct[];
+  statistics: {
+    bargain_percentage: number;
+  };
+  similar_products: {
+    sold: SoldProduct[];
+    active: ActiveProduct[];
   };
 };
